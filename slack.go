@@ -2,7 +2,12 @@
 package slack
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"os"
 
@@ -28,8 +33,7 @@ var (
 			"reactions:write",
 			"app_me ntions:read"},
 	}
-	botToken  = os.Getenv("BOT_TOKEN")
-	oauthTmpl = template.Must(template.ParseFiles("./oauth.html"))
+	botToken = os.Getenv("BOT_TOKEN")
 )
 
 type oauthPage struct {
@@ -52,7 +56,7 @@ func OauthHandler(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("Error processing Oauth code")
 	}
 
-	//Get token
+	//Retrieve access token
 	log.Infof("Returned code is: %v", code)
 
 	if _, err := oauthConfig.Exchange(c, code); err != nil {
@@ -62,7 +66,42 @@ func OauthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Send to HMTL oauth success response page
+	oauthTmpl := template.Must(template.ParseFiles("./serverless_function_source_code/oauth.html"))
 	if err := oauthTmpl.Execute(w, &oauthPage{"Welcome! You can now run the slash command."}); err != nil {
 		log.Errorf("Error executing oauthTmpl template: %s", err)
+	}
+}
+
+//IssueSearchHandler searches Jira issue given Mantis number and returns the issue link in Jira
+func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
+	//store headers for signature calculation
+	slackTimestamp := r.Header.Get("X-Slack-Request-Timestamp")
+	slackVersion := "v0:"
+	slackSignature := r.Header.Get("X-Slack-Signature")
+
+	//read body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Errorf("Error reading body: %v", err)
+		http.Error(w, "can't read body", http.StatusBadRequest)
+		return
+	}
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+	//Compare signatures of request and calculated
+	slackBaseString := slackVersion + slackTimestamp + ":" + string(body)
+	if err != nil {
+		log.Errorf("strconv.ParseInt(%s): %v", slackTimestamp, err)
+	}
+	h := hmac.New(sha256.New, []byte(botToken))
+	h.Write([]byte(slackBaseString))
+
+	sha := hex.EncodeToString(h.Sum(nil))
+	sha = "v0=" + sha
+
+	if sha != slackSignature {
+		log.Errorf("Signature mismatch")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 }
