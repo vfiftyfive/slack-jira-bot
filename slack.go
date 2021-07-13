@@ -29,8 +29,8 @@ var (
 			TokenURL: "https://slack.com/api/oauth.v2.access",
 		},
 		Scopes: []string{"channels:read",
+			"channels:join",
 			"chat:write",
-			"chat:write.customize ",
 			"im:read", "im:write",
 			"incoming-webhook",
 			"chat:write.public",
@@ -49,7 +49,8 @@ type oauthPage struct {
 
 //Status represents the Jira issue status
 type Status struct {
-	Name string `json:"name"`
+	Description string `json:"description"`
+	Name        string `json:"name"`
 }
 
 //Field represents the fields returned by the Jira API request
@@ -78,8 +79,8 @@ type SlackRichFormat struct {
 
 //Text is the Slack formatted text object
 type Text struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type       string `json:"type"`
+	SimpleText string `json:"text"`
 }
 
 //Block is the top-object representing slack rich format payload
@@ -200,30 +201,51 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	//Return data
-	returnText := Text{
-		Type: "mrkdwn",
-		Text: ":raised_hands: Found Jira ID AVX-1234. Here's the hyperlink:\n <https://aviatrix.atlassian.net/browse/" + j.Issues[0].Key + ">",
-	}
-
-	summaryText := Text{
-		Type: "mrkdwn",
-		Text: "*Issue Summary*\n" + j.Issues[0].Fields.Summary,
-	}
-
-	firstBlock := Block{
-		Type: "section",
-		Text: returnText,
-	}
-
-	secondBlock := Block{
-		Type: "section",
-		Text: summaryText,
-	}
-
-	s := SlackRichFormat{[]Block{firstBlock, secondBlock}}
-
 	if len(j.Issues) > 0 {
+		returnText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf(":raised_hands: Found Jira ID %v. Here's the hyperlink: https://aviatrix.atlassian.net/browse/%v", j.Issues[0].Key, j.Issues[0].Key),
+		}
+
+		summaryText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf("*Issue Summary*\n%v", j.Issues[0].Fields.Summary),
+		}
+
+		statusText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf("*Issue Status*\n%v", j.Issues[0].Fields.Status.Name),
+		}
+
+		mantisText := Text{
+			Type:       "plain_text",
+			SimpleText: fmt.Sprintf("Mantis %v", slashText),
+		}
+
+		mantisBlock := Block{
+			Type: "header",
+			Text: mantisText,
+		}
+
+		firstBlock := Block{
+			Type: "section",
+			Text: returnText,
+		}
+
+		secondBlock := Block{
+			Type: "section",
+			Text: summaryText,
+		}
+
+		thirdBlock := Block{
+			Type: "section",
+			Text: statusText,
+		}
+
+		s := SlackRichFormat{[]Block{mantisBlock, firstBlock, secondBlock, thirdBlock}}
 		jsonResponse, _ := (json.Marshal(s))
+		log.Infof("App HTTP Response Body: %v", string(jsonResponse))
+		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(string(jsonResponse)))
 	} else {
 		response := fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText)
