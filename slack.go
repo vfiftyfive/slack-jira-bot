@@ -183,6 +183,6 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	//Return data
-	response := fmt.Sprintf("Found Jira ID: %v. Here's the hyperlink: https://aviatrix.atlassian.net/browse/%v\nSummary: %v", j.Issues[0].Key, j.Issues[0].Key, j.Issues[0].Fields.Summary)
+	response := fmt.Sprintf(":raised_hands: Found Jira ID: %v. Here's the hyperlink: https://aviatrix.atlassian.net/browse/%v\nSummary: %v", j.Issues[0].Key, j.Issues[0].Key, j.Issues[0].Fields.Summary)
 	w.Write([]byte(response))
 }
