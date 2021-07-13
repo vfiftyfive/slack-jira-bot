@@ -71,6 +71,23 @@ type JiraAPIResponse struct {
 	Issues []Issue `json:"issues"`
 }
 
+//SlackRichFormat holds a list of formatted blocks
+type SlackRichFormat struct {
+	Blocks []Block `json:"blocks"`
+}
+
+//Text is the Slack formatted text object
+type Text struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+//Block is the top-object representing slack rich format payload
+type Block struct {
+	Type string `json:"type"`
+	Text Text   `json:"text"`
+}
+
 //OauthHandler handles application install in user workspace
 func OauthHandler(w http.ResponseWriter, r *http.Request) {
 	c := r.Context()
@@ -137,7 +154,7 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//Parse Slash command to get Mantis Id
+	//Parse Slash command to get Mantis ID
 	slashText := r.FormValue("text")
 	log.Infof("Mantis ID is: %v", slashText)
 
@@ -183,12 +200,33 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	//Return data
-	var response string
+	returnText := Text{
+		Type: "mrkdwn",
+		Text: ":raised_hands: Found Jira ID AVX-1234. Here's the hyperlink:\n <https://aviatrix.atlassian.net/browse/" + j.Issues[0].Key + ">",
+	}
+
+	summaryText := Text{
+		Type: "mrkdwn",
+		Text: "*Issue Summary*\n" + j.Issues[0].Fields.Summary,
+	}
+
+	firstBlock := Block{
+		Type: "section",
+		Text: returnText,
+	}
+
+	secondBlock := Block{
+		Type: "section",
+		Text: summaryText,
+	}
+
+	s := SlackRichFormat{[]Block{firstBlock, secondBlock}}
+
 	if len(j.Issues) > 0 {
-		response = fmt.Sprintf(":raised_hands: Found Jira ID: %v. Here's the hyperlink: https://aviatrix.atlassian.net/browse/%v\nSummary: %v", j.Issues[0].Key, j.Issues[0].Key, j.Issues[0].Fields.Summary)
-		w.Write([]byte(response))
+		jsonResponse, _ := (json.Marshal(s))
+		w.Write([]byte(string(jsonResponse)))
 	} else {
-		response = fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText)
+		response := fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText)
 		w.Write([]byte(response))
 	}
 }
