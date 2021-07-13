@@ -35,7 +35,7 @@ var (
 			"incoming-webhook",
 			"chat:write.public",
 			"reactions:write",
-			"app_me ntions:read"},
+			"app_mentions:read"},
 	}
 	signingSecret = os.Getenv("SIGNING_SECRET")
 	jiraURL       = "https://aviatrix.atlassian.net/rest/api/2/search"
