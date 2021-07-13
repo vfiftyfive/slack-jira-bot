@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
@@ -36,10 +37,10 @@ var (
 			"reactions:write",
 			"app_me ntions:read"},
 	}
-	botToken     = os.Getenv("BOT_TOKEN")
-	jiraURL      = "https://aviatrix.atlassian.net/rest/api/2/search"
-	userName     = "nvermande@aviatrix.com"
-	JiraAPIToken = os.Getenv("JIRA_API_TOKEN")
+	signingSecret = os.Getenv("SIGNING_SECRET")
+	jiraURL       = "https://aviatrix.atlassian.net/rest/api/2/search"
+	userName      = "nvermande@aviatrix.com"
+	jiraAPIToken  = os.Getenv("JIRA_API_TOKEN")
 )
 
 type oauthPage struct {
@@ -59,10 +60,10 @@ type Field struct {
 
 //Issue repesents the Jira Issue
 type Issue struct {
-	ID     int    `json:"id"`
+	ID     string `json:"id"`
 	Link   string `json:"self"`
 	Key    string `json:"key"`
-	Fields Field  `json:"field"`
+	Fields Field  `json:"fields"`
 }
 
 //JiraAPIResponse is the API top-level response.
@@ -117,13 +118,14 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	bodyString := string(body)
 
 	//Compare computed signature with request signature
-	slackBaseString := slackVersion + slackTimestamp + ":" + string(body)
+	slackBaseString := slackVersion + slackTimestamp + ":" + string(bodyString)
 	if err != nil {
 		log.Errorf("strconv.ParseInt(%s): %v", slackTimestamp, err)
 	}
-	h := hmac.New(sha256.New, []byte(botToken))
+	h := hmac.New(sha256.New, []byte(signingSecret))
 	h.Write([]byte(slackBaseString))
 
 	sha := hex.EncodeToString(h.Sum(nil))
@@ -140,7 +142,7 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Mantis ID is: %v", slashText)
 
 	//Use Jira API to find issue # corresponding to the Mantis (SlashText)
-	JQL := "project = AVX AND Mantis[URL] = https:\\\\u002f\\\\u002fmantis.aviatrix.com\\\\u002fmantisbt\\\\u002fview.php\\\\u003fid\\\\u003d" + slashText
+	JQL := "project = AVX AND Mantis[URL] = 'https://mantis.aviatrix.com/mantisbt/view.php?id=" + slashText + "'"
 	jsonString := "{\"jql\": \"" + JQL + "\"," +
 		"\"fields\": [" +
 		"\"key\"," +
@@ -153,23 +155,23 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	jsonData := strings.NewReader(jsonString)
 
 	//Create new HTTP request
-	r, err = http.NewRequest("POST", jiraURL, jsonData)
+	req, err := http.NewRequest("POST", jiraURL, jsonData)
 	if err != nil {
 		log.Errorf("Error received: %v", err)
 	}
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Accept", "application/json")
-	r.SetBasicAuth(userName, JiraAPIToken)
-	body, _ = ioutil.ReadAll(r.Body)
-	log.Infof("Request Body: %v\nRequest Auth header: %v", string(body), r.Header.Get("Authorization"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	req.SetBasicAuth(userName, jiraAPIToken)
 
 	//Use Jira API to find issue number given Mantis Id
-	resp, err := http.DefaultClient.Do(r)
+	httpClient := &http.Client{
+		Timeout: time.Second * 10,
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Errorf("Error with POST method on resource %v: %v", jiraURL, err)
 	}
-	body, _ = ioutil.ReadAll(resp.Body)
-	log.Infof(" Response Body: %v \n", string(body))
 
 	//Process HTTP Response
 	var j JiraAPIResponse

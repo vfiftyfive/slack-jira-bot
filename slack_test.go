@@ -6,15 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func TestJiraAPI(t *testing.T) {
-	jiraURL := "https://aviatrix.atlassian.net/rest/api/2/search"
-	userName := "nvermande@aviatrix.com"
-	jiraAPIToken := "xQtACc0gt7XpzDWCF8js0783"
 	MantisID := "12477"
 	JQL := "project = AVX AND Mantis[URL] = https:\\\\u002f\\\\u002fmantis.aviatrix.com\\\\u002fmantisbt\\\\u002fview.php\\\\u003fid\\\\u003d" + MantisID
 	jsonString := "{\"jql\": \"" + JQL + "\"," +
@@ -63,7 +62,6 @@ func TestSlashHandler(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(URLData.Encode())))
 
 	//Create ResponseRecorder
 	rec := httptest.NewRecorder()
@@ -74,4 +72,40 @@ func TestSlashHandler(t *testing.T) {
 	}
 
 	t.Logf("Body content: %v", rec.Body.String())
+}
+
+func TestJiraCloud(t *testing.T) {
+	// JQL := "project = AVX AND Mantis[URL] = 'https://mantis.aviatrix.com/mantisbt/view.php?id=12477"
+	// jsonString := "{\"jql\": \"" + JQL + "\"," +
+	// 	"\"fields\": [" +
+	// 	"\"key\"," +
+	// 	"\"status\"," +
+	// 	"\"summary\"" +
+	// 	"]" +
+	// 	"}"
+
+	//Create JSON string payload
+	// jsonData := strings.NewReader(jsonString)
+
+	//Create new HTTP request
+	req, err := http.NewRequest("GET", "https://aviatrix.atlassian.net/rest/api/2/field", nil)
+	if err != nil {
+		t.Errorf("Error received: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	req.SetBasicAuth(userName, jiraAPIToken)
+
+	//Use Jira API to find issue number given Mantis Id
+	httpClient := &http.Client{
+		Timeout: time.Second * 10,
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		t.Errorf("Error with GET method on resource %v: %v", jiraURL, err)
+	}
+	body, _ := ioutil.ReadAll(resp.Body)
+	log.Infof(" Response Body: %v \n", string(body))
+
 }
