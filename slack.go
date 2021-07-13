@@ -18,8 +18,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
-//oauthConfig represents the oauth configuration
 var (
+	//oauthConfig represents the oauth configuration
 	oauthConfig = &oauth2.Config{
 		ClientID:     os.Getenv("CLIENT_ID"),
 		ClientSecret: os.Getenv("CLIENT_SECRET"),
@@ -37,7 +37,7 @@ var (
 			"app_me ntions:read"},
 	}
 	botToken     = os.Getenv("BOT_TOKEN")
-	jiraURL      = "https://aviatrix.atlassian.net"
+	jiraURL      = "https://aviatrix.atlassian.net/rest/api/2/search"
 	userName     = "nvermande@aviatrix.com"
 	JiraAPIToken = os.Getenv("JIRA_API_TOKEN")
 )
@@ -137,6 +137,7 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	//Parse Slash command to get Mantis Id
 	slashText := r.FormValue("text")
+	log.Infof("Mantis ID is: %v", slashText)
 
 	//Use Jira API to find issue # corresponding to the Mantis (SlashText)
 	JQL := "project = AVX AND Mantis[URL] = https:\\\\u002f\\\\u002fmantis.aviatrix.com\\\\u002fmantisbt\\\\u002fview.php\\\\u003fid\\\\u003d" + slashText
@@ -152,19 +153,23 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	jsonData := strings.NewReader(jsonString)
 
 	//Create new HTTP request
-	req, err := http.NewRequest("POST", jiraURL, jsonData)
+	r, err = http.NewRequest("POST", jiraURL, jsonData)
 	if err != nil {
 		log.Errorf("Error received: %v", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.SetBasicAuth(userName, JiraAPIToken)
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Accept", "application/json")
+	r.SetBasicAuth(userName, JiraAPIToken)
+	body, _ = ioutil.ReadAll(r.Body)
+	log.Infof("Request Body: %v\nRequest Auth header: %v", string(body), r.Header.Get("Authorization"))
 
-	//Use Jira API to find issue number give Mantis Id
-	resp, err := http.DefaultClient.Do(req)
+	//Use Jira API to find issue number given Mantis Id
+	resp, err := http.DefaultClient.Do(r)
 	if err != nil {
 		log.Errorf("Error with POST method on resource %v: %v", jiraURL, err)
 	}
+	body, _ = ioutil.ReadAll(resp.Body)
+	log.Infof(" Response Body: %v \n", string(body))
 
 	//Process HTTP Response
 	var j JiraAPIResponse

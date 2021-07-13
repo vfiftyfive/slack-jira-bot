@@ -14,7 +14,7 @@ import (
 func TestJiraAPI(t *testing.T) {
 	jiraURL := "https://aviatrix.atlassian.net/rest/api/2/search"
 	userName := "nvermande@aviatrix.com"
-	JiraAPIToken := "xQtACc0gt7XpzDWCF8js0783"
+	jiraAPIToken := "xQtACc0gt7XpzDWCF8js0783"
 	MantisID := "12477"
 	JQL := "project = AVX AND Mantis[URL] = https:\\\\u002f\\\\u002fmantis.aviatrix.com\\\\u002fmantisbt\\\\u002fview.php\\\\u003fid\\\\u003d" + MantisID
 	jsonString := "{\"jql\": \"" + JQL + "\"," +
@@ -36,7 +36,7 @@ func TestJiraAPI(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.SetBasicAuth(userName, JiraAPIToken)
+	req.SetBasicAuth(userName, jiraAPIToken)
 
 	//Perform HTTP request
 	resp, err := http.DefaultClient.Do(req)
@@ -55,7 +55,7 @@ func TestJiraAPI(t *testing.T) {
 
 func TestSlashHandler(t *testing.T) {
 	URLData := url.Values{}
-	URLData.Set("text", "94070")
+	URLData.Set("text", "12477")
 
 	//Create mock HTTP POST request
 	req, err := http.NewRequest("POST", "https://us-central1-nv-avtx-compute.cloudfunctions.net/IssueSearchHandler", strings.NewReader(URLData.Encode()))
@@ -70,7 +70,7 @@ func TestSlashHandler(t *testing.T) {
 	handler := http.HandlerFunc(IssueSearchHandler)
 	handler.ServeHTTP(rec, req)
 	if status := rec.Code; status != http.StatusOK {
-		t.Errorf("Handler returner unexpected status %v. Wanted %v", status, http.StatusOK)
+		t.Errorf("Handler returned unexpected status %v. Wanted %v", status, http.StatusOK)
 	}
 
 	t.Logf("Body content: %v", rec.Body.String())
