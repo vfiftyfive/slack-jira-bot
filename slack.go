@@ -158,6 +158,15 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	slashText := r.FormValue("text")
 	log.Infof("Mantis ID is: %v", slashText)
 
+	//Get redirect_url webhook to POST second message with results
+	responseURL := r.FormValue("response_url")
+	log.Infof("Response URL is %v", responseURL)
+
+	//Send immediate HTTP 200
+	w.WriteHeader((http.StatusOK))
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(""))
+
 	//Use Jira API to find issue # corresponding to the Mantis (SlashText)
 	JQL := "project = AVX AND Mantis[URL] = 'https://mantis.aviatrix.com/mantisbt/view.php?id=" + slashText + "'"
 	jsonString := "{\"jql\": \"" + JQL + "\"," +
@@ -223,10 +232,38 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	s := SlackRichFormat{[]Block{firstBlock, secondBlock}}
 
 	if len(j.Issues) > 0 {
+		//Create JSON string payload
 		jsonResponse, _ := (json.Marshal(s))
-		w.Write([]byte(string(jsonResponse)))
+		jsonData := strings.NewReader(string(jsonResponse))
+		//Create new HTTP request
+		req, err := http.NewRequest("POST", responseURL, jsonData)
+		if err != nil {
+			log.Errorf("Error received: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		//Post Request to webhook
+		httpClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+		if _, err = httpClient.Do(req); err != nil {
+			log.Errorf("Error with POST method on resource %v: %v", jiraURL, err)
+		}
 	} else {
 		response := fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText)
-		w.Write([]byte(response))
+		jsonData := strings.NewReader(response)
+		req, err := http.NewRequest("POST", responseURL, jsonData)
+		if err != nil {
+			log.Errorf("Error received: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		//Post Request to webhook
+		httpClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+		if _, err = httpClient.Do(req); err != nil {
+			log.Errorf("Error with POST method on resource %v: %v", responseURL, err)
+		}
 	}
 }
