@@ -71,15 +71,15 @@ type JiraAPIResponse struct {
 	Issues []Issue `json:"issues"`
 }
 
-//SlackRichFormat holds a list of formatted blocks
-type SlackRichFormat struct {
+//RichFormat holds a list of formatted blocks
+type RichFormat struct {
 	Blocks []Block `json:"blocks"`
 }
 
 //Text is the Slack formatted text object
 type Text struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type       string `json:"type"`
+	SimpleText string `json:"text"`
 }
 
 //Block is the top-object representing slack rich format payload
@@ -121,7 +121,7 @@ func OauthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 //IssueSearchHandler searches Jira issue given Mantis number and returns the issue link in Jira
-func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
+func DevIssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	//get headers for signature calculation
 	slackTimestamp := r.Header.Get("X-Slack-Request-Timestamp")
 	slackVersion := "v0:"
@@ -209,32 +209,52 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	//Return data
-	returnText := Text{
-		Type: "mrkdwn",
-		Text: ":raised_hands: Found Jira ID AVX-1234. Here's the hyperlink:\n <https://aviatrix.atlassian.net/browse/" + j.Issues[0].Key + ">",
-	}
-
-	summaryText := Text{
-		Type: "mrkdwn",
-		Text: "*Issue Summary*\n" + j.Issues[0].Fields.Summary,
-	}
-
-	firstBlock := Block{
-		Type: "section",
-		Text: returnText,
-	}
-
-	secondBlock := Block{
-		Type: "section",
-		Text: summaryText,
-	}
-
-	s := SlackRichFormat{[]Block{firstBlock, secondBlock}}
-
 	if len(j.Issues) > 0 {
+		returnText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf(":raised_hands: Found Jira ID %v. Here's the hyperlink: https://aviatrix.atlassian.net/browse/%v", j.Issues[0].Key, j.Issues[0].Key),
+		}
+
+		summaryText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf("*Issue Summary*\n%v", j.Issues[0].Fields.Summary),
+		}
+
+		statusText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf("*Issue Status*\n%v", j.Issues[0].Fields.Status.Name),
+		}
+
+		mantisText := Text{
+			Type:       "plain_text",
+			SimpleText: fmt.Sprintf("Mantis %v", slashText),
+		}
+
+		mantisBlock := Block{
+			Type: "header",
+			Text: mantisText,
+		}
+
+		firstBlock := Block{
+			Type: "section",
+			Text: returnText,
+		}
+
+		secondBlock := Block{
+			Type: "section",
+			Text: summaryText,
+		}
+
+		thirdBlock := Block{
+			Type: "section",
+			Text: statusText,
+		}
+		s := RichFormat{[]Block{mantisBlock, firstBlock, secondBlock, thirdBlock}}
+
 		//Create JSON string payload
 		jsonResponse, _ := (json.Marshal(s))
 		jsonData := strings.NewReader(string(jsonResponse))
+
 		//Create new HTTP request
 		req, err := http.NewRequest("POST", responseURL, jsonData)
 		if err != nil {
@@ -242,6 +262,7 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
+
 		//Post Request to webhook
 		httpClient := &http.Client{
 			Timeout: time.Second * 10,
@@ -250,14 +271,30 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("Error with POST method on resource %v: %v", jiraURL, err)
 		}
 	} else {
-		response := fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText)
-		jsonData := strings.NewReader(response)
+		//Create response for miss
+		returnText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText),
+		}
+
+		firstBlock := Block{
+			Type: "section",
+			Text: returnText,
+		}
+		s := RichFormat{[]Block{firstBlock}}
+
+		//Create JSON string payload
+		jsonResponse, _ := (json.Marshal(s))
+		jsonData := strings.NewReader(string(jsonResponse))
+
+		//Create new HTTP request
 		req, err := http.NewRequest("POST", responseURL, jsonData)
 		if err != nil {
 			log.Errorf("Error received: %v", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
+
 		//Post Request to webhook
 		httpClient := &http.Client{
 			Timeout: time.Second * 10,
