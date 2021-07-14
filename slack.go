@@ -122,7 +122,7 @@ func OauthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 //IssueSearchHandler searches Jira issue given Mantis number and returns the issue link in Jira
-func DevIssueSearchHandler(w http.ResponseWriter, r *http.Request) {
+func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	//get headers for signature calculation
 	slackTimestamp := r.Header.Get("X-Slack-Request-Timestamp")
 	slackVersion := "v0:"
@@ -250,14 +250,6 @@ func DevIssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 			Type: "section",
 			Text: statusText,
 		}
-<<<<<<< HEAD
-
-		s := SlackRichFormat{[]Block{mantisBlock, firstBlock, secondBlock, thirdBlock}}
-		jsonResponse, _ := (json.Marshal(s))
-		log.Infof("App HTTP Response Body: %v", string(jsonResponse))
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(string(jsonResponse)))
-=======
 		s := RichFormat{[]Block{mantisBlock, firstBlock, secondBlock, thirdBlock}}
 
 		//Create JSON string payload
@@ -279,7 +271,6 @@ func DevIssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 		if _, err = httpClient.Do(req); err != nil {
 			log.Errorf("Error with POST method on resource %v: %v", jiraURL, err)
 		}
->>>>>>> dev
 	} else {
 		//Create response for miss
 		returnText := Text{
