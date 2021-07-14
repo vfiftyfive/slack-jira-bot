@@ -72,8 +72,8 @@ type JiraAPIResponse struct {
 	Issues []Issue `json:"issues"`
 }
 
-//SlackRichFormat holds a list of formatted blocks
-type SlackRichFormat struct {
+//RichFormat holds a list of formatted blocks
+type RichFormat struct {
 	Blocks []Block `json:"blocks"`
 }
 
@@ -122,7 +122,7 @@ func OauthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 //IssueSearchHandler searches Jira issue given Mantis number and returns the issue link in Jira
-func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
+func DevIssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	//get headers for signature calculation
 	slackTimestamp := r.Header.Get("X-Slack-Request-Timestamp")
 	slackVersion := "v0:"
@@ -158,6 +158,15 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	//Parse Slash command to get Mantis ID
 	slashText := r.FormValue("text")
 	log.Infof("Mantis ID is: %v", slashText)
+
+	//Get redirect_url webhook to POST second message with results
+	responseURL := r.FormValue("response_url")
+	log.Infof("Response URL is %v", responseURL)
+
+	//Send immediate HTTP 200
+	w.WriteHeader((http.StatusOK))
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(""))
 
 	//Use Jira API to find issue # corresponding to the Mantis (SlashText)
 	JQL := "project = AVX AND Mantis[URL] = 'https://mantis.aviatrix.com/mantisbt/view.php?id=" + slashText + "'"
@@ -241,14 +250,67 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 			Type: "section",
 			Text: statusText,
 		}
+<<<<<<< HEAD
 
 		s := SlackRichFormat{[]Block{mantisBlock, firstBlock, secondBlock, thirdBlock}}
 		jsonResponse, _ := (json.Marshal(s))
 		log.Infof("App HTTP Response Body: %v", string(jsonResponse))
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(string(jsonResponse)))
+=======
+		s := RichFormat{[]Block{mantisBlock, firstBlock, secondBlock, thirdBlock}}
+
+		//Create JSON string payload
+		jsonResponse, _ := (json.Marshal(s))
+		jsonData := strings.NewReader(string(jsonResponse))
+
+		//Create new HTTP request
+		req, err := http.NewRequest("POST", responseURL, jsonData)
+		if err != nil {
+			log.Errorf("Error received: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+
+		//Post Request to webhook
+		httpClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+		if _, err = httpClient.Do(req); err != nil {
+			log.Errorf("Error with POST method on resource %v: %v", jiraURL, err)
+		}
+>>>>>>> dev
 	} else {
-		response := fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText)
-		w.Write([]byte(response))
+		//Create response for miss
+		returnText := Text{
+			Type:       "mrkdwn",
+			SimpleText: fmt.Sprintf(":x: Sorry! Couldn't find any match for Mantis %v in Jira.", slashText),
+		}
+
+		firstBlock := Block{
+			Type: "section",
+			Text: returnText,
+		}
+		s := RichFormat{[]Block{firstBlock}}
+
+		//Create JSON string payload
+		jsonResponse, _ := (json.Marshal(s))
+		jsonData := strings.NewReader(string(jsonResponse))
+
+		//Create new HTTP request
+		req, err := http.NewRequest("POST", responseURL, jsonData)
+		if err != nil {
+			log.Errorf("Error received: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+
+		//Post Request to webhook
+		httpClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+		if _, err = httpClient.Do(req); err != nil {
+			log.Errorf("Error with POST method on resource %v: %v", responseURL, err)
+		}
 	}
 }
