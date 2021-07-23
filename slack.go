@@ -1,5 +1,6 @@
-//Package slack implements bot integration to slack
 package slack
+
+//Package slack provides a Jira bot integration to slack
 
 import (
 	"bytes"
@@ -9,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -59,7 +61,7 @@ type Field struct {
 	Status  Status `json:"status"`
 }
 
-//Issue repesents the Jira Issue
+//Issue represents the Jira Issue
 type Issue struct {
 	ID     string `json:"id"`
 	Link   string `json:"self"`
@@ -114,7 +116,7 @@ func OauthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//Send to HMTL oauth success response page
+	//Send to HTML oauth success response page
 	oauthTmpl := template.Must(template.ParseFiles("./serverless_function_source_code/oauth.html"))
 	if err := oauthTmpl.Execute(w, &oauthPage{"Welcome! You can now run the slash command."}); err != nil {
 		log.Errorf("Error executing oauthTmpl template: %s", err)
@@ -140,9 +142,6 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	//Compare computed signature with request signature
 	slackBaseString := slackVersion + slackTimestamp + ":" + string(bodyString)
-	if err != nil {
-		log.Errorf("strconv.ParseInt(%s): %v", slackTimestamp, err)
-	}
 	h := hmac.New(sha256.New, []byte(signingSecret))
 	h.Write([]byte(slackBaseString))
 
@@ -207,7 +206,12 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Errorf("Cannot decode object. Error: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Errorf("Error received: %v", err)
+		}
+	}(resp.Body)
 
 	//Return data
 	if len(j.Issues) > 0 {
@@ -285,7 +289,7 @@ func IssueSearchHandler(w http.ResponseWriter, r *http.Request) {
 		s := RichFormat{[]Block{firstBlock}}
 
 		//Create JSON string payload
-		jsonResponse, _ := (json.Marshal(s))
+		jsonResponse, _ := json.Marshal(s)
 		jsonData := strings.NewReader(string(jsonResponse))
 
 		//Create new HTTP request
